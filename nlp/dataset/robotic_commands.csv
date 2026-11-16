@@ -1,0 +1,13 @@
+command,intent,action,target_object,target_color,destination,spatial_preposition
+"Pick up the red bottle and place it inside the storage box.",pick_and_place,pick_and_place,bottle,red,storage box,inside
+"Grab the blue cup and put it on the tray.",pick_and_place,pick_and_place,cup,blue,tray,on
+"Take the green apple and place it inside the basket.",pick_and_place,pick_and_place,apple,green,basket,inside
+"Move the yellow can onto the table.",pick_and_place,pick_and_place,can,yellow,table,onto
+"Lift the scissors and drop it inside the container.",pick_and_place,pick_and_place,scissors,,container,inside
+"Pick up the red can and put it in the box.",pick_and_place,pick_and_place,can,red,box,in
+"Inspect the workspace.",inspect,inspect,,,,
+"Scan the environment for objects.",inspect,inspect,,,,
+"Stop the robot now.",emergency_stop,stop,,,,
+"Emergency halt.",emergency_stop,stop,,,,
+"Clean up the workspace.",clean_workspace,clean,,,,
+"Clear all clutter from the table.",clean_workspace,clean,,,,

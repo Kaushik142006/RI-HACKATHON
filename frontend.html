@@ -1,0 +1,312 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>VLA Physical AI - Industrial Parcel Automation</title>
+<style>
+:root{--bg:#0d1117;--pn:#151a21;--bd:#2a3340;--tx:#d8dee9;--ac:#2bb3e8;--ok:#3fb950;--er:#f85149;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:12px system-ui,sans-serif;display:grid;grid-template:auto minmax(0,1fr) 170px/265px minmax(0,1fr) 250px}
+#top{grid-column:1/4;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--pn);border-bottom:1px solid var(--bd);padding:6px 10px}
+#top b{color:var(--ac);letter-spacing:1px}.pill{background:#222b36;border:1px solid var(--bd);border-radius:10px;padding:2px 8px}
+aside,footer>div{background:var(--pn);padding:8px;overflow:auto;border:1px solid var(--bd)}
+button{background:#232c38;color:var(--tx);border:1px solid #3a4655;border-radius:4px;padding:4px 7px;margin:1px;font-size:11px;cursor:pointer}button:hover{border-color:var(--ac)}.red{background:#8b1d1d}
+input[type=text]{width:100%;box-sizing:border-box;background:#0b0f14;color:var(--tx);border:1px solid var(--bd);padding:6px}
+h4{margin:8px 0 3px;color:var(--ac)}.note{color:#8b98a8;font-size:10px;margin:4px 0}
+#cv{position:relative;min-height:300px}#cv canvas{position:absolute;left:0;top:0}#ov{pointer-events:none;z-index:1}#tb{position:absolute;z-index:2;top:3px;left:3px;right:3px}
+.ag{display:flex;gap:5px;align-items:center;padding:2px 0;border-bottom:1px solid #202833;font-size:11px}.dot{width:8px;height:8px;border-radius:50%;background:#555;flex:none}
+.running .dot{background:var(--ac)}.done .dot{background:var(--ok)}.error .dot{background:var(--er)}
+#B{grid-column:1/4;display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:0}#B>div{font:11px monospace}
+.chip{display:inline-block;background:#222b36;border-radius:3px;margin:1px;padding:1px 4px}.bar{height:8px;background:#222b36}.bar i{display:block;height:100%;background:var(--ok);width:0}
+input[type=range]{width:100%}
+@media(max-width:850px){body{display:block;height:auto}#cv{height:65vh}#B{display:block}#B>div{height:150px}}
+.ps .dot{background:#e8a317}.es .dot{background:#f85149}#al{position:absolute;z-index:3;left:50%;transform:translateX(-50%);top:40px;width:min(600px,92%)}.alb{background:#1a0f10f2;border:2px solid;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:4px}.alb button{margin-top:4px}
+</style></head><body>
+<header id="top"><b>VLA PHYSICAL AI</b><span style="color:#8b98a8">Industrial Parcel Automation</span><span id="s1" class="pill"></span><span id="s2" class="pill"></span><span id="s3" class="pill"></span><span id="s4" class="pill"></span><span id="s5" class="pill"></span><button class="red" id="bE">⏹ EMERGENCY STOP</button></header>
+<aside id="L"><input type="text" id="cmd" value="Pick up the red parcel and place it in sorting bin A">
+<div><button id="bS">▶ Start</button><button id="bP">⏸ Pause</button><button id="bR">⏵ Resume</button><button id="bRs">Reset</button></div>
+<label><input type="checkbox" id="inj"> inject grasp error</label>
+<div class="note">Browser-based deterministic NLP parser (keyword/regex) — not a real LLM. YOLOv8, ByteTrack, RGB-D, LiDAR, ROS 2 and MoveIt 2 are SIMULATED in JavaScript.</div>
+<h4>Scenarios</h4><div id="sc"></div><h4>16 Agents</h4><div id="ag"></div></aside>
+<main id="cv"><div id="tb"></div><canvas id="ov"></canvas><div id="al"></div></main>
+<aside id="R"><h4>Robot</h4><div id="jn"></div><div id="ee"></div><div id="gs"></div><div id="tk"></div><h4>Safety supervisor (deterministic, simulated)</h4><div id="sf"></div><h4>Detected objects</h4><div id="dt"></div></aside>
+<footer id="B"><div id="log"></div><div><div id="tl"></div></div><div id="an"></div></footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const $=s=>document.querySelector(s),V=(x,y,z)=>new THREE.Vector3(x,y,z),PI=Math.PI,cv=$('#cv'),ov=$('#ov');
+const S=new THREE.Scene();S.background=new THREE.Color(0x0b0f14);
+const R=new THREE.WebGLRenderer({antialias:true});R.shadowMap.enabled=true;cv.prepend(R.domElement);
+const cam=new THREE.PerspectiveCamera(50,1,.05,30);cam.position.set(1.3,1.2,1.5);
+const oc=new THREE.OrbitControls(cam,R.domElement);oc.target.set(0,.2,.15);
+S.add(new THREE.HemisphereLight(0xbcd0ff,0x202020,.6));
+const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(2,3.5,2);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-2,right:2,top:2,bottom:-2});sun.shadow.mapSize.set(2048,2048);S.add(sun);
+const mat=(c,m=.4,r=.5)=>new THREE.MeshStandardMaterial({color:c,metalness:m,roughness:r});
+const add=(w,h,d,m,x,y,z,p=S)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o};
+const cyl=(r1,r2,h,m,x,y,z,p=S,hinge)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,24),m);o.position.set(x,y,z);if(hinge)o.rotation.z=PI/2;o.castShadow=o.receiveShadow=true;p.add(o);return o};
+// ===== industrial parcel sorting facility =====
+const cvT=(w,h,f)=>{const c=document.createElement('canvas');c.width=w;c.height=h;f(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t};
+const dec=(...a)=>{const o=add(...a);o.castShadow=false;return o},noRay=o=>{o.raycast=()=>{};return o};
+const rolls=[],f0=-.85,dg=mat(0x2b3138,.7,.4),stM=mat(0x8a9099,.8,.4),yel=mat(0xf2c200,.3,.5),ORA=mat(0xff7a1a,.4,.4),cardM=mat(0xb98b55,0,.9),wood=mat(0x9c7a4d,0,.9);
+S.background=new THREE.Color(0x9aa7b4);S.fog=new THREE.Fog(0x9aa7b4,10,30);
+const conc=cvT(256,256,(x,w,h)=>{x.fillStyle='#74777a';x.fillRect(0,0,w,h);for(let i=0;i<4000;i++){const g=95+Math.random()*60|0;x.fillStyle=`rgba(${g},${g},${g+4},.45)`;x.fillRect(Math.random()*w,Math.random()*h,2,2)}x.strokeStyle='#5d6063';x.strokeRect(0,0,w,h)});conc.repeat.set(14,14);
+const hz=cvT(128,128,(x,w,h)=>{x.fillStyle='#f2c200';x.fillRect(0,0,w,h);x.fillStyle='#111';for(let i=-4;i<5;i++){x.beginPath();x.moveTo(i*32,h);x.lineTo(i*32+16,h);x.lineTo(i*32+16+h,0);x.lineTo(i*32+h,0);x.fill()}});
+const hzT=(a,b)=>{const t=hz.clone();t.needsUpdate=true;t.repeat.set(a,b);return t},hzM=a=>new THREE.MeshStandardMaterial({map:hzT(a[0],a[1]),roughness:.7});
+const sign=(t1,t2,bg,fg,w,h,x,y,z)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:cvT(256,Math.round(256*h/w),(c,W,H)=>{c.fillStyle=bg;c.fillRect(0,0,W,H);c.strokeStyle=fg;c.lineWidth=5;c.strokeRect(4,4,W-8,H-8);c.fillStyle=fg;c.textAlign='center';c.font=`bold ${Math.round(H*(t2?.32:.5))}px sans-serif`;c.fillText(t1,W/2,t2?H*.46:H*.65);if(t2){c.font=`bold ${Math.round(H*.24)}px sans-serif`;c.fillText(t2,W/2,H*.8)}})}));m.position.set(x,y,z);noRay(m);S.add(m);return m};
+const wallM=new THREE.MeshStandardMaterial({map:cvT(64,64,(x,w,h)=>{x.fillStyle='#b7bec6';x.fillRect(0,0,w,h);for(let i=0;i<w;i+=8){x.fillStyle='rgba(0,0,0,.12)';x.fillRect(i,0,3,h)}}),roughness:.8});wallM.map.repeat.set(30,1);
+dec(30,.1,30,new THREE.MeshStandardMaterial({map:conc,roughness:.8,metalness:.1}),0,f0-.05,0);
+dec(30,6,.2,wallM,0,2.15,-4.5);dec(.2,6,30,wallM,-7,2.15,0);dec(.2,6,30,wallM,7,2.15,0);dec(30,6,.2,wallM,0,2.15,7);dec(30,.2,30,mat(0x3a4048,.4,.7),0,5.2,0);
+const win=new THREE.MeshBasicMaterial({color:0xd6ecff});
+for(let i=-5;i<=5;i+=2.5){dec(1.8,1.3,.04,win,i,3.3,-4.38);dec(.05,1.3,.06,dg,i,3.3,-4.36);dec(1.8,.05,.06,dg,i,3.3,-4.36)}
+const col=mat(0x59636e,.6,.5);[-5,5].forEach(x=>[-3.8,-1,1.8,4.5].forEach(z=>{dec(.35,6,.35,col,x,2.15,z);dec(.38,.5,.38,hzM([1,2]),x,f0+.25,z)}));
+for(let z=-4;z<=6;z+=2){dec(14,.25,.14,dg,0,4.85,z);dec(14,.12,.14,dg,0,4.4,z);for(let x=-6.5;x<=6.5;x+=1.3)dec(.06,.5,.1,dg,x,4.62,z)}
+[-5,-2.5,0,2.5,5].forEach(x=>dec(.14,.18,11,dg,x,5,.5));
+cyl(.28,.28,13,stM,0,4,-3.4,S,1).castShadow=false;dec(13,.05,.3,stM,0,4.2,-1.5);
+const led0=new THREE.MeshBasicMaterial({color:0xffffff});[-3,0,3].forEach(x=>[-2.5,1,4].forEach(z=>dec(1.2,.05,.4,led0,x,4.7,z)));
+[[-2,4,0],[2,4,2],[0,4,-3],[0,3,.8]].forEach(p=>{const l=new THREE.PointLight(0xfff0dd,.5,14);l.position.set(...p);S.add(l)});
+const orgM=mat(0xe8731a,.5,.5),bluM=mat(0x2f5fa8,.5,.5);
+for(const rx of [-5.5,-3.3,-1.1,1.1,3.3,5.5]){for(const ux of [-1.05,1.05])for(const uz of [-3.6,-4.2])dec(.06,3.2,.06,bluM,rx+ux,f0+1.6,uz);
+for(let l=0;l<4;l++){const y=f0+.15+l*.85;dec(2.1,.05,.7,orgM,rx,y,-3.9);for(let b=0;b<3;b++){const h=.25+Math.random()*.25;dec(.35+Math.random()*.2,h,.4,cardM,rx-.65+b*.65,y+.025+h/2,-3.9)}}}
+[[4.2,1.6],[5.4,2.8],[-4.5,1.8]].forEach(([x,z])=>{dec(1.2,.12,1,wood,x,f0+.06,z);for(let l=0;l<3;l++)for(let j=0;j<2;j++)dec(.5,.35,.45,cardM,x-.27+j*.54,f0+.3+l*.35,z)});
+dec(8,.1,.6,dg,3,f0+.75,-2.4);for(let i=0;i<5;i++)dec(.06,.7,.5,dg,-.5+i*1.6,f0+.35,-2.4);for(let i=0;i<3;i++)dec(.4,.3,.35,cardM,1.6+i*1.5,f0+.95,-2.4);
+for(let x=-1.3;x<=1.31;x+=.65)dec(.05,1,.05,yel,x,f0+.5,-.85);dec(2.65,.04,.03,yel,0,f0+.95,-.85);dec(2.65,.04,.03,yel,0,f0+.55,-.85);
+[-1.35,1.35].forEach(x=>{for(let z=-.85;z<=.9;z+=.55)dec(.05,1,.05,yel,x,f0+.5,z);dec(.03,.04,1.75,yel,x,f0+.95,.025);dec(.03,.04,1.75,yel,x,f0+.55,.025)});
+dec(3,.006,.14,hzM([14,1]),0,f0+.003,-1.05);dec(3,.006,.14,hzM([14,1]),0,f0+.003,1.5);dec(.14,.006,2.6,hzM([1,12]),-1.6,f0+.003,.25);dec(.14,.006,2.6,hzM([1,12]),1.6,f0+.003,.25);
+[-1.5,1.5].forEach(x=>{dec(.07,.9,.07,dg,x,f0+.45,1.1);dec(.16,.2,.1,yel,x,f0+.97,1.1);cyl(.04,.04,.05,mat(0xd62020,.2,.4),x,f0+1.1,1.1).castShadow=false;sign('E-STOP',null,'#d62020','#fff',.14,.05,x,f0+.97,1.155)});
+sign('WORKSTATION 01','PARCEL SORTING CELL','#14202b','#2bb3e8',1.4,.4,0,f0+1.45,-.84);sign('CAUTION','ROBOT OPERATING ZONE','#f2c200','#111',1.6,.5,-2.5,2,-4.38);sign('ZONE A / B / C','OUTBOUND SORTING','#14202b','#fff',1.6,.5,2.5,2,-4.38);
+// conveyor + work platform
+add(2.2,.06,.53,stM,0,-.03,-.285);add(2.2,.06,.77,stM,0,-.03,.565);add(1.53,.04,.2,dg,-.335,-.05,.08);add(.67,.06,.2,stM,.765,-.03,.08);
+[[-1.05,-.5],[1.05,-.5],[-1.05,.9],[1.05,.9]].forEach(l=>add(.06,.82,.06,dg,l[0],-.44,l[1]));
+for(let x=-1.07;x<.43;x+=.04){const r=cyl(.012,.012,.2,mat(0xc5ccd3,.9,.3),x,-.012,.08);r.rotation.set(PI/2,0,0);rolls.push(r)}
+add(1.53,.04,.015,stM,-.335,.02,-.025);add(1.53,.04,.015,stM,-.335,.02,.185);add(.22,.14,.24,dg,-1.22,-.04,.08);add(.08,.04,.14,ORA,-1.22,.05,.08);
+sign('INCOMING >>',null,'#14202b','#fff',.3,.07,-.7,.002,.235).rotation.x=-PI/2;sign('PICK ZONE',null,'#14202b','#2bb3e8',.2,.06,-.05,.002,.235).rotation.x=-PI/2;
+// sorting bins A/B/C
+const BINS={red:[.45,.3],blue:[-.2,.48],yellow:[.58,-.02]},BCOL={red:0xd62828,blue:0x2f6fed,yellow:0xf2c200},BTXT={red:['ZONE A','PRIORITY'],blue:['ZONE B','STANDARD'],yellow:['ZONE C','FRAGILE']},BS=[[-.04,-.04],[.04,-.04],[-.04,.04],[.04,.04]];
+for(const k in BINS){const [bx,bz]=BINS[k],m=mat(BCOL[k],.1,.6);add(.22,.02,.22,m,bx,.01,bz);[[0,.104,.22,.012],[0,-.104,.22,.012],[.104,0,.012,.22],[-.104,0,.012,.22]].forEach(w=>add(w[2],.1,w[3],m,bx+w[0],.05,bz+w[1]));
+[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(c=>add(.02,.12,.02,stM,bx+c[0]*.112,.06,bz+c[1]*.112));sign(BTXT[k][0]+' '+BTXT[k][1],null,'#14202b','#fff',.17,.05,bx,.055,bz+.1125)}
+const inBin=o=>Object.values(BINS).some(b=>Math.hypot(o.mesh.position.x-b[0],o.mesh.position.z-b[1])<.12)&&o.mesh.position.y<.12;
+// obstacle (safety bollard) + restricted zone
+const pillar=add(.1,.28,.1,new THREE.MeshStandardMaterial({map:hzT(1,3),roughness:.5,metalness:.3}),.12,.14,.27);const OB=new THREE.Box3().setFromObject(pillar);
+const zone=noRay(new THREE.Mesh(new THREE.BoxGeometry(.24,.4,.24),new THREE.MeshBasicMaterial({color:0xff3030,transparent:true,opacity:.15,depthWrite:false})));zone.position.set(.12,.2,.27);S.add(zone);
+const obst=on=>{pillar.visible=zone.visible=on;if(on)OB.setFromObject(pillar);else OB.makeEmpty();L(on?'Obstacle placed at (0.12, 0.27)':'Obstacle removed')};
+// parcel textures
+const HXc={red:'#e5383b',blue:'#2f6fed',green:'#2fb344',yellow:'#f2c200',purple:'#8e44ad',orange:'#f08a24'},CAT={red:['A','PRIORITY'],blue:['B','STANDARD'],yellow:['C','FRAGILE']},PM={};
+const cardT=cvT(128,128,(x,w,h)=>{x.fillStyle='#b98b55';x.fillRect(0,0,w,h);for(let i=0;i<600;i++){x.fillStyle=`rgba(${80+Math.random()*60|0},55,25,.18)`;x.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*9,1)}x.fillStyle='rgba(228,212,170,.9)';x.fillRect(0,h/2-7,w,14)});
+function parcelMats(type,color){const k=type+color;if(PM[k])return PM[k];const c=CAT[color]||['B','STANDARD'],cube=type=='cube';
+const lab=cvT(128,128,(x,w,h)=>{x.fillStyle=cube?'#b98b55':'#f2f2f2';x.fillRect(0,0,w,h);if(cube){x.fillStyle='rgba(228,212,170,.9)';x.fillRect(0,h/2-7,w,14)}x.fillStyle='#fff';x.fillRect(12,12,104,104);x.fillStyle=HXc[color];x.fillRect(12,12,104,26);x.fillStyle=color=='yellow'?'#111':'#fff';x.font='bold 16px sans-serif';x.fillText('ZONE '+c[0],16,31);x.fillStyle='#111';x.font='bold 12px sans-serif';x.fillText(c[1],16,54);for(let i=0;i<34;i++)x.fillRect(16+i*2.8,62,1+(i*7%3),30);x.font='10px sans-serif';x.fillText(color=='yellow'?'FRAGILE \u2191 THIS WAY UP':'PARCEL \u2191',16,108)});
+const m=t=>new THREE.MeshStandardMaterial({map:t,roughness:.85}),sd=m(cardT),pl=new THREE.MeshStandardMaterial({color:cube?0xb98b55:0xf2f2f2,roughness:.85});
+return PM[k]=cube?[sd,sd,m(lab),sd,sd,sd]:[m(lab),pl,pl]}
+// robot
+const LA=.45,LB=.45,TT=.2,SH=.3,BX=0,BZ=-.3,steel=mat(0xe3e6e9,.35,.35),dark=mat(0x2a2e33,.7,.4),org=mat(0xf2f3f4,.3,.4);
+const rb=new THREE.Group();rb.position.set(0,0,-.3);S.add(rb);cyl(.15,.17,.06,dark,0,.03,0,rb);
+const j1=new THREE.Group();rb.add(j1);cyl(.1,.11,.22,org,0,.17,0,j1);
+const j2=new THREE.Group();j2.position.y=SH;j1.add(j2);cyl(.065,.065,.15,steel,0,0,0,j2,1);add(.08,LA,.08,steel,0,LA/2,0,j2);
+const j3=new THREE.Group();j3.position.y=LA;j2.add(j3);cyl(.055,.055,.12,dark,0,0,0,j3,1);add(.065,LB,.065,steel,0,LB/2,0,j3);
+const j4=new THREE.Group();j4.position.y=LB;j3.add(j4);cyl(.04,.04,.06,org,0,0,0,j4);
+const j5=new THREE.Group();j4.add(j5);cyl(.035,.035,.09,dark,0,0,0,j5,1);cyl(.03,.03,.1,dark,0,.05,0,j5);
+const j6=new THREE.Group();j6.position.y=.1;j5.add(j6);add(.1,.03,.05,dark,0,.01,0,j6);
+const fL=add(.012,.06,.03,steel,0,.09,0,j6),fR=add(.012,.06,.03,steel,0,.09,0,j6);const tip=new THREE.Object3D();tip.position.y=.1;j6.add(tip);
+let gap=.09;const setGap=g=>{gap=g;fL.position.x=-(g/2+.006);fR.position.x=g/2+.006};setGap(.09);
+const rub=mat(0x151515,0,.95);add(.014,.05,.034,rub,.007,0,0,fL);add(.014,.05,.034,rub,-.007,0,0,fR);cyl(.03,.03,.05,dark,0,.045,0,j6);add(.02,.02,.03,ORA,0,.05,.035,j6);
+cyl(.112,.112,.02,ORA,0,.2,0,j1);cyl(.07,.07,.015,ORA,0,.0,0,j3,1);
+const led=noRay(new THREE.Mesh(new THREE.SphereGeometry(.012,12,12),new THREE.MeshBasicMaterial({color:0x3fb950})));led.position.set(0,.24,.1);j1.add(led);
+const idp=noRay(new THREE.Mesh(new THREE.PlaneGeometry(.07,.035),new THREE.MeshBasicMaterial({map:cvT(128,64,(x,w,h)=>{x.fillStyle='#ddd';x.fillRect(0,0,w,h);x.fillStyle='#111';x.font='bold 22px sans-serif';x.fillText('VLA-6X',8,28);x.font='12px sans-serif';x.fillText('6-AXIS  12 kg',8,52)})})));idp.position.set(0,.14,.111);j1.add(idp);
+const LIM=[[-3,3],[-.2,2],[0,2.7],[-3,3],[-2,3.2],[-3,3]],HOME=[0,.35,1.2,0,PI-.35-1.2,0];let q=[...HOME];
+const applyQ=a=>{j1.rotation.y=a[0];j2.rotation.x=a[1];j3.rotation.x=a[2];j4.rotation.y=a[3];j5.rotation.x=a[4];j6.rotation.y=a[5]};applyQ(q);
+const tipPos=()=>{S.updateMatrixWorld(true);return tip.getWorldPosition(V(0,0,0))};
+function IK(p){const dx=p.x-BX,dz=p.z-BZ,r=Math.hypot(dx,dz),h=p.y-SH+TT,d=Math.hypot(r,h);if(d>LA+LB-.01||d<.02)return null;
+const g=Math.acos((LA*LA+LB*LB-d*d)/(2*LA*LB)),t3=PI-g,t2=Math.atan2(r,h)-Math.atan2(LB*Math.sin(t3),LA+LB*Math.cos(t3)),k=[Math.atan2(dx,dz),t2,t3,0,PI-t2-t3,0];
+return k.every((v,i)=>v>=LIM[i][0]&&v<=LIM[i][1])?k:null}
+// camera (virtual RGB-D)
+const vcam=new THREE.PerspectiveCamera(55,4/3,.3,3.2);vcam.position.set(0,1.15,1.15);vcam.lookAt(0,0,.2);vcam.updateMatrixWorld();
+const helper=new THREE.CameraHelper(vcam);helper.raycast=()=>{};S.add(helper);add(.08,.06,.1,dark,0,1.15,1.15);cyl(.025,.025,2,dark,0,.15,1.24);add(.05,.05,.1,dark,0,1.15,1.22);
+const trajLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xf5a623}));trajLine.raycast=()=>{};trajLine.frustumCulled=false;S.add(trajLine);
+const rLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xff3030}));rLine.raycast=()=>{};rLine.frustumCulled=false;S.add(rLine);const setTraj=p=>{trajLine.geometry.setFromPoints(p);if(!p.length)rLine.geometry.setFromPoints([])};
+// objects
+const COLS={red:0xe5383b,blue:0x2f6fed,green:0x2fb344,yellow:0xf2c200,purple:0x8e44ad,orange:0xf08a24},HX=c=>'#'+COLS[c].toString(16).padStart(6,'0');
+let OBJS=[],held=null,idc=0;
+function mkObj(type,color,x,z){const h=type=='cube'?.06:type=='cylinder'?.08:.16,g=type=='cube'?new THREE.BoxGeometry(.06,h,.06):new THREE.CylinderGeometry(type=='bottle'?.02:.03,.03,h,24);
+const m=new THREE.Mesh(g,parcelMats(type,color));m.castShadow=m.receiveShadow=true;m.position.set(x,h/2,z);const o={id:'P'+String(++idc).padStart(3,'0'),type,color,mesh:m,w:.06,h,home:V(x,h/2,z)};m.userData.oid=o.id;S.add(m);OBJS.push(o);return o}
+function resetEnv(){OBJS.forEach(o=>S.remove(o.mesh));OBJS=[];held=null;idc=0;[['cube','red',-.25,.22],['cube','blue',0,.42],['cube','green',.35,.02],['cube','yellow',.2,.12],['cylinder','yellow',-.15,.05],['bottle','blue',-.55,.04]].forEach(a=>mkObj(...a))}
+resetEnv();
+// state, metrics, utils
+let scn=1,avoidOn=true,convOn=true,cSpeed=.06,lastSpawn=0,T0=performance.now(),paused=false,estop=false,busy=false,tw=null,DET=[],showCam=true,boxes=true,coords=true,depth=false,prog=0,curTask='-',DATA={};
+const M={es:0,ps:0,avoid:0,cmds:0,done:0,failed:0,grasps:0,gfail:0,replans:0,times:[],det:0};
+const wait=t=>tween(t,()=>{});
+function tween(dur,f){return new Promise((res,rej)=>{tw={t:0,dur:Math.max(.01,dur),f,res,rej}})}
+const L=m=>{const d=$('#log');d.insertAdjacentHTML('afterbegin',`<div>${new Date().toLocaleTimeString()} ${m}</div>`);while(d.children.length>80)d.lastChild.remove()};
+async function moveP(p,dur){const a=tipPos();CUR=p.clone();dur=dur||Math.max(.5,a.distanceTo(p)/.5);await tween(dur,e=>{const k=IK(a.clone().lerp(p,e));if(!k)throw Error('IK: target unreachable');q=k;applyQ(q)})}
+async function moveQ(t,dur){const a=[...q];await tween(dur,e=>{q=a.map((v,i)=>v+(t[i]-v)*e);applyQ(q)})}
+async function grip(g){const g0=gap;await tween(.4,e=>setGap(g0+(g-g0)*e))}
+async function closeG(){const tp=tipPos();let c=null;for(const o of OBJS)if(!o.held){const d=o.mesh.position;if(Math.hypot(d.x-tp.x,d.z-tp.z)<.035&&Math.abs(d.y-tp.y)<.04)c=o}
+if(c&&c.w<=.09){await grip(c.w);tip.attach(c.mesh);c.held=1;held=c;M.grasps++;L('Grasp OK: '+c.id);return true}await grip(0);M.gfail++;L('Grasp FAILED (no object between jaws)');return false}
+async function release(){await grip(.09);if(held){S.attach(held.mesh);held.held=0;L('Released '+held.id);held=null}}
+const blocked=p=>avoidOn&&OB.intersectsBox(new THREE.Box3(V(p.x-.07,p.y-.05,p.z-.07),V(p.x+.07,p.y+.25,p.z+.07)));
+const pathOK=(a,b)=>{for(let i=0;i<=16;i++){const c=a.clone().lerp(b,i/16);if(blocked(c)||!IK(c))return false}return true};
+// NLP (deterministic)
+function parse(s){s=s.toLowerCase().replace(/[.!?,]/g,'').replace(/-?labell?ed/g,'').replace(/\bstandard (?:collection )?(?:area|bin|container)\b/g,'blue container').replace(/\b(?:sorting\s+)?(?:bin|zone|area)\s+([abc])\b/g,(_,k)=>({a:'red',b:'blue',c:'yellow'}[k])+' container').replace(/\bcollection area\b/g,'container').replace(/\bpriority\b/g,'red').replace(/\bstandard\b/g,'blue').replace(/\bfragile\b/g,'yellow').replace(/\b(?:parcels?|packages?|cartons?)\b/g,'cube');const r={action:null,obj:null,dest:null};let m,di=s.length;
+if(m=s.match(/\b(?:inside|into|in|to|onto)\s+(?:the\s+)?(?:(red|blue|green|yellow)\s+)?(?:container|box|bin)/)){r.dest={kind:'container',color:m[1]||null};di=m.index}
+else if(m=s.match(/storage/)){r.dest={kind:'storage'};di=m.index}
+else if(m=s.match(/\b(left|right)(?: side)?/)){r.dest={kind:'side',side:m[1]};di=m.index}
+else if(m=s.match(/(?:beside|next to|near|by)\s+(?:the\s+)?(red|blue|green|yellow)?\s*(cube|cylinder|bottle)/)){r.dest={kind:'beside',ref:{color:m[1]||null,type:m[2]}};di=m.index}
+const pre=s.slice(0,di);
+if(m=pre.match(/(red|blue|green|yellow|purple|orange)?\s*(cube|cylinder|bottle)/))r.obj={color:m[1]||null,type:m[2]};else if(/\bit\b/.test(pre))r.obj={held:true};if(m=pre.match(/\bp0*(\d+)\b/))r.obj=Object.assign(r.obj||{},{id:'P'+m[1].padStart(3,'0')});
+if(/arrange|sort|organi[sz]e/.test(s))r.action='arrange';else if(/identify|nearest|closest|detect|find/.test(s)&&!/pick|grab|place|put|move/.test(s))r.action='identify';
+else if(r.dest&&r.obj)r.action='place';else if(/pick|grab|grasp|lift/.test(s)&&r.obj)r.action='pick';return r}
+// vision: real projection + raycast occlusion
+function detect(){vcam.updateMatrixWorld();S.updateMatrixWorld(true);const rc=new THREE.Raycaster(),out=[];
+for(const o of OBJS){const b=new THREE.Box3().setFromObject(o.mesh),c=b.getCenter(V(0,0,0));let x0=9,y0=9,x1=-9,y1=-9,inV=true;
+for(let i=0;i<8;i++){const v=V(i&1?b.max.x:b.min.x,i&2?b.max.y:b.min.y,i&4?b.max.z:b.min.z).project(vcam);if(v.z>1)inV=false;x0=Math.min(x0,v.x);x1=Math.max(x1,v.x);y0=Math.min(y0,v.y);y1=Math.max(y1,v.y)}
+const cn=c.clone().project(vcam);if(Math.abs(cn.x)>1||Math.abs(cn.y)>1||cn.z>1)inV=false;let vis=false;
+if(inV){const dir=c.clone().sub(vcam.position),dist=dir.length();rc.set(vcam.position,dir.normalize());rc.far=dist+.5;const h=rc.intersectObjects(S.children,true)[0];let p=h&&h.object;while(p&&!p.userData.oid)p=p.parent;vis=!!p&&p.userData.oid==o.id}
+out.push({id:o.id,name:o.color+' '+o.type,color:o.color,x:c.x,y:c.y,z:c.z,dist:vcam.position.distanceTo(c),box:[x0,y0,x1,y1],vis,held:!!o.held})}
+M.det=out.filter(d=>d.vis).length;return out}
+// agents
+const AG=[],TLc=[];
+class Agent{constructor(n,name,role,i,o,f){Object.assign(this,{n,name,role,i,o,st:'idle',logs:[],exec:f});AG[n]=this}
+log(m){this.logs.push(m);L(`<b>A${this.n} ${this.name}</b>: ${m}`)}
+async run(S2,x){this.st='running';ui();const t=performance.now();let bad=0;try{await wait(.12);return await this.exec(S2,x)}catch(e){bad=1;this.log('ERROR '+e.message);this.st=SAFE.latched?'es':'error';throw e}finally{if(!bad)this.st='done';TLc.push(`A${this.n} ${((performance.now()-t)/1000).toFixed(1)}s${bad?' ✗':''}`);$('#tl').innerHTML=TLc.slice(-40).map(c=>`<span class=chip>${c}</span>`).join('');ui()}}}
+const find=(r,ex)=>OBJS.filter(q=>q!==ex&&(!r.id||q.id==r.id)&&(!r.color||q.color==r.color)&&(!r.type||q.type==r.type));
+const SL=[[-.58,.18],[-.42,.18],[-.58,.32],[-.42,.32]];
+function destPos(s,o){const d=s.dest,rest=o.h/2;
+if(d.kind=='container'){const b=BINS[d.color||'blue'];if(!b)throw Error('No '+d.color+' container in scene');const n=OBJS.filter(z=>z!==o&&!z.held&&inBin(z)&&Math.hypot(z.mesh.position.x-b[0],z.mesh.position.z-b[1])<.12).length,k=BS[n%4];return V(b[0]+k[0],.024+rest,b[1]+k[1])}
+if(d.kind=='storage'){const n=OBJS.filter(z=>z!==o&&!z.held&&Math.abs(z.mesh.position.x+.5)<.17&&Math.abs(z.mesh.position.z-.25)<.14).length,k=SL[n%4];return V(k[0],rest,k[1])}
+if(d.kind=='side')return d.side=='left'?V(-.62,rest,-.05):V(.55,rest,.12);
+const r=find(d.ref,o)[0];if(!r)throw Error('Reference object not found');const rp=r.mesh.position;
+for(const [a,b] of [[.1,0],[-.1,0],[0,-.1],[0,.1]]){const p=V(rp.x+a,rest,rp.z+b);if(OBJS.every(z=>z===o||z.held||Math.hypot(z.mesh.position.x-p.x,z.mesh.position.z-p.z)>.08)&&IK(V(p.x,.3,p.z)))return p}throw Error('No free spot beside reference')}
+new Agent(1,'Main Orchestrator','Coordinates all agents, conditional flow, final report','command','task report',async()=>{});
+new Agent(2,'Initial Environment Check','Verify robot ready, E-stop clear, gripper state','sim state','env status',async function(S2){if(estop)throw Error('E-STOP active');if(OBS.active&&OBS.mesh.visible&&ZONE.intersectsBox(new THREE.Box3().setFromObject(OBS.mesh)))throw Error('Workspace unsafe: obstruction inside robot zone - operator notified');
+if(held){this.log('Gripper holding '+held.id+' → putting it back first');const o=held,h=o.home;await moveP(V(h.x,.3,h.z));await moveP(V(h.x,h.y,h.z));await release();await moveP(V(h.x,.3,h.z))}
+S2.env={objects:OBJS.length};this.log(OBJS.length+' objects, robot ready')});
+new Agent(3,'Vision Context Prompt','Capture RGB-D frame & summarise scene','camera frame','scene context',async function(S2){S2.det=detect();S2.ctx=S2.det.filter(d=>d.vis).map(d=>d.name).join(', ');this.log('Scene: '+(S2.ctx||'nothing visible'))});
+new Agent(4,'NLP','Deterministic command parsing','text','action/object/dest',async function(S2){S2.p=parse(S2.cmd);if(!S2.p.action)throw Error('Unsupported command');this.log(JSON.stringify(S2.p))});
+new Agent(5,'Work Splitter','Split command into sub-tasks','parsed command','sub-task list',async function(S2){const p=S2.p;
+if(p.action=='arrange'){S2.subs=OBJS.filter(o=>o.type=='cube'&&!o.held&&!inBin(o)&&IK(V(o.mesh.position.x,.25,o.mesh.position.z))).map(o=>({id:o.id,obj:{color:o.color,type:'cube'},dest:{kind:'container',color:BINS[o.color]?o.color:'blue'}}))}
+else if(p.action=='identify')S2.subs=[];else S2.subs=[{obj:p.obj,dest:p.action=='place'?p.dest:null}];this.log(S2.subs.length+' sub-task(s)')});
+new Agent(9,'AI Path Planning','Choose carry heights, note obstacles','sub-task','candidate heights',async function(S2){S2.sub.heights=[.3,.45];{const c=OB.getCenter(V(0,0,0));this.log((OB.isEmpty()?'Obstacles: none':'Obstacle detected near x='+c.x.toFixed(2)+' z='+c.z.toFixed(2)+(avoidOn?'':' (avoidance DISABLED)'))+'; candidate carry heights 0.30 / 0.45 m')}});
+new Agent(6,'Perception','Resolve target from live detections, check reach','detections','target candidates',async function(S2){S2.det=detect();const s=S2.sub;let c;
+if(s.obj.held){if(!held)throw Error('Nothing is held');c=[held]}else c=s.id?OBJS.filter(o=>o.id==s.id):find(s.obj);
+c=c.filter(o=>o.held||S2.det.find(d=>d.id==o.id&&d.vis));if(!c.length)throw Error('DETECTION_FAIL: no '+((s.obj.color||'')+' '+(s.obj.type||'object')).trim()+' detected');
+c=c.filter(o=>o.held||IK(V(o.mesh.position.x,.25,o.mesh.position.z))&&IK(o.mesh.position));if(!c.length)throw Error('Object not accessible (outside workspace)');s.cands=c;this.log(c.length+' accessible candidate(s)')});
+new Agent(7,'Task Planning','Create ordered step list','target','steps',async function(S2){const s=S2.sub;s.steps=(s.cands[0].held?[]:['hover','descend','grasp']).concat(s.dest?['lift','transport','lower','release','retreat']:['lift']);this.log(s.steps.join(' → '))});
+new Agent(8,'Decision','Pick target & grasp strategy','candidates','chosen target',async function(S2){const s=S2.sub;s.t=s.cands.sort((a,b)=>Math.hypot(a.mesh.position.x-BX,a.mesh.position.z-BZ)-Math.hypot(b.mesh.position.x-BX,b.mesh.position.z-BZ))[0];curTask='Task: '+S2.cmd+' ['+s.t.id+']';this.log('Target '+s.t.id+' ('+s.t.color+' '+s.t.type+'), top-down grasp')});
+new Agent(10,'Synthesizer','Merge agent outputs into one execution plan','robot+camera','sync flag',async function(S2){S2.det=detect();const d=S2.det.find(x=>x.id==S2.sub.t.id),p=S2.sub.t.mesh.position;this.log('Camera/scene delta '+(d?Math.hypot(d.x-p.x,d.z-p.z).toFixed(3):'n/a')+' m — synced')});
+new Agent(11,'ROS 2 Communication (sim)','Package plan as controller packets','task plan','packets',async function(S2){S2.packets=S2.sub.steps.map((n,i)=>({seq:i,op:n}));this.log(S2.packets.length+' packets sent, ACK received')});
+new Agent(12,'MoveIt 2 Motion Planning (sim)','IK waypoints, collision checks, alternatives','target+dest','waypoints',async function(S2){const s=S2.sub,o=s.t,g=o.mesh.position.clone(),off=S2.inject&&s.try==0&&!o.held?.05:0,hov=V(g.x+off,.25,g.z),gr=V(g.x+off,g.y,g.z),wp=[];let from=tipPos();
+if(!o.held){if(!pathOK(from,hov))throw Error('PATH: hover pose blocked/unreachable');wp.push(['hover',hov],['grasp',gr]);from=gr}
+if(s.dest){const d=destPos(s,o);let k=0,ok=0;for(const H of s.heights){const up=V(from.x,H,from.z),ac=V(d.x,H,d.z);
+if(pathOK(from,up)&&pathOK(up,ac)&&pathOK(ac,d)){wp.push(['lift',up],['transport',ac],['lower',d.clone()],['retreat',V(d.x,.3,d.z)]);ok=1;if(k){s.alt=1;M.avoid++;rLine.geometry.setFromPoints([from.clone(),V(from.x,.3,from.z),V(d.x,.3,d.z),d.clone()]);M.replans++;this.log('Direct path blocked → alternative carry height '+H+' m')}break}k++}
+if(!ok)throw Error('PATH: no collision-free route');s.dpos=d}else wp.push(['lift',V(from.x,.3,from.z)]);
+s.wp=wp;if(!s.alt)rLine.geometry.setFromPoints([]);trajLine.material.color.set(s.alt?0xff8c00:0x3fb950);setTraj([tipPos(),...wp.map(w=>w[1])]);this.log(wp.length+' waypoints validated (IK + collision)')});
+new Agent(13,'ros2_control Hardware (sim)','Execute motion & gripper','waypoints','arm state',async function(S2){const s=S2.sub;await grip(.09);SAFE.begin(s);let i=0;for(let wi=0;wi<s.wp.length;wi++){const [n,p]=s.wp[wi];SAFE.wi=wi;prog=(S2.si+(.3+.6*Math.min(i++,s.wp.length)/s.wp.length))/S2.subs.length;if(n=='transport'&&scn==2)SAFE.launch();try{await moveP(p)}catch(e){if(e.message=='REPLAN'&&SAFE.plan){s.wp.splice(wi,1,...SAFE.plan,[n,p]);SAFE.plan=null;wi--;continue}throw e}if(n=='grasp'){if(!await closeG())throw Error('GRASP_FAIL');await wait(.15)}if(n=='lower')await release()}this.log('Motion complete')});
+new Agent(14,'Verification','Re-detect and verify result','post-state','pass/fail',async function(S2){const s=S2.sub,o=s.t,p=o.mesh.position;await wait(.2);S2.det=detect();
+const ok=s.dpos?Math.hypot(p.x-s.dpos.x,p.z-s.dpos.z)<.05&&!o.held&&Math.abs(p.y-s.dpos.y)<.03:o.held&&p.y>.1;if(!ok)throw Error('VERIFY_FAIL');this.log('Verified '+o.id+' at ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+', '+p.z.toFixed(2)+')')});
+new Agent(15,'Evaluation','Score sub-task','result','metrics',async function(S2){const t=(performance.now()-S2.t0)/1000;this.log('Sub-task OK after '+t.toFixed(1)+' s, retries '+S2.sub.try)});
+new Agent(16,'Error Handling','Classify failures, recover or abort','exception','retry/abort',async function(S2,e){const s=S2.sub;if(e.message=='GRASP_FAIL'&&s&&s.try<2){s.try++;M.replans++;this.log('Re-detect + replan, attempt '+s.try);await grip(.09);const t=tipPos();await moveP(V(t.x,.3,t.z),.6);return 'retry'}this.log('Unrecoverable: '+e.message);return 'abort'});
+async function runCommand(cmd){if(/^\s*(stop the conveyor|pause the robot|resume)/i.test(cmd)){if(/conveyor/i.test(cmd))convOn=false;else if(/pause/i.test(cmd))paused=true;else if(SAFE.latched)return L('Cannot resume: EMERGENCY STOP LATCHED');else paused=false;return L('Command executed: '+cmd)}
+if(SAFE.latched)return L('<b style="color:#f85149">Command refused: EMERGENCY STOP LATCHED - operator reset required</b>');if(busy)return L('Busy — wait or Reset');busy=true;estop=false;AG.forEach(a=>a&&(a.st='idle'));TLc.length=0;const S2={cmd,t0:performance.now(),inject:$('#inj').checked};M.cmds++;prog=0;AG[1].st='running';L('<b>Command:</b> '+cmd);
+try{await AG[2].run(S2);await AG[3].run(S2);await AG[4].run(S2);await AG[5].run(S2);
+if(S2.p.action=='identify'){await wait(.2);const d=detect().filter(x=>x.vis&&(!S2.p.obj||(!S2.p.obj.color||x.color==S2.p.obj.color)&&x.name.includes(S2.p.obj.type||''))).sort((a,b)=>Math.hypot(a.x-BX,a.z-BZ)-Math.hypot(b.x-BX,b.z-BZ))[0];if(!d)throw Error('DETECTION_FAIL: nothing matching detected');L(`<b>Identified:</b> ${d.name} ${d.id} at (${d.x.toFixed(2)}, ${d.y.toFixed(2)}, ${d.z.toFixed(2)}), ${d.dist.toFixed(2)} m from camera`)}
+else{if(!S2.subs.length)throw Error('Nothing to do');
+for(S2.si=0;S2.si<S2.subs.length;S2.si++){S2.sub=S2.subs[S2.si];S2.sub.try=0;
+for(;;){try{for(const k of [6,7,8,9,10,11,12,13,14,15])await AG[k].run(S2);break}catch(e){if(e.message=='E-STOP')throw e;let r='abort';try{r=await AG[16].run(S2,e)}catch(e2){if(e2.message=='E-STOP')throw e2}if(r!='retry')throw e}}
+prog=(S2.si+1)/S2.subs.length}}
+const t=(performance.now()-S2.t0)/1000;M.done++;M.times.push(t);prog=1;AG[1].st='done';L(`<b style="color:#3fb950">TASK COMPLETE</b> in ${t.toFixed(1)} s`)}
+catch(e){M.failed++;AG[1].st=SAFE.latched?'es':'error';L(`<b style="color:#f85149">TASK FAILED:</b> ${e.message}`);if(e.message=='E-STOP'){L('Emergency stop — Reset to continue')}else{try{await moveQ(HOME,1)}catch(_){}}}
+finally{busy=false;curTask='-';ui()}}
+let goal=null;const VW=[['Iso',[1.3,1.2,1.5],[0,.2,.15]],['Top',[0,2.6,.3],[0,0,.2]],['Front',[0,.5,2.4],[0,.2,.15]],['Side',[2.4,.6,.2],[0,.2,.15]],['Robot',[.55,.65,.45],[0,.35,-.3]],['Conveyor',[-.2,.4,.75],[-.1,0,.08]]];
+const stepCam=()=>{if(goal){cam.position.lerp(goal[0],.08);oc.target.lerp(goal[1],.08);if(cam.position.distanceTo(goal[0])<.01)goal=null}oc.update()};
+function spawn(){const t=['cube','cube','cube','cylinder','bottle'][Math.random()*5|0],c=['red','blue','yellow','green'][Math.random()*4|0];if(OBJS.some(o=>!o.held&&Math.hypot(o.mesh.position.x+.8,o.mesh.position.z-.08)<.1))return L('Conveyor entry occupied');mkObj(t,c,-.8,.08);L('Parcel spawned on conveyor: '+c+' '+t)}
+function conv(dt){if(!convOn||estop||paused||busy)return;const k=cSpeed*dt;rolls.forEach(r=>r.rotation.y-=k/.012);
+for(const o of OBJS){if(o.held)continue;const p=o.mesh.position;if(p.z<-.02||p.z>.18||p.x>.42||p.y>.1)continue;if(OBJS.some(z=>z!==o&&!z.held&&Math.abs(z.mesh.position.z-p.z)<.07&&z.mesh.position.x>p.x&&z.mesh.position.x-p.x<.075))continue;p.x=Math.min(.42,p.x+k)}
+lastSpawn+=dt;if(lastSpawn>12&&cSpeed>0){lastSpawn=0;if(OBJS.length<9)spawn()}}
+// ===== Independent Safety Supervisor (deterministic JS, NOT an agent, NOT a certified safety controller) =====
+let CUR=null;const ZONE=new THREE.Box3(V(-.8,-.1,-.15),V(.8,.7,.72)),LS=V(-1,.12,.9),rc2=new THREE.Raycaster();
+cyl(.025,.025,.1,dg,-1,.05,.9);cyl(.05,.05,.04,mat(0x111111,.5,.3),-1,.12,.9).castShadow=false;cyl(.02,.02,.2,dg,1,.1,.85);
+const beac=noRay(new THREE.Mesh(new THREE.SphereGeometry(.035,12,12),new THREE.MeshBasicMaterial({color:0x3fb950})));beac.position.set(1,.23,.85);S.add(beac);const bl=new THREE.PointLight(0xff2020,0,3);bl.position.copy(beac.position);S.add(bl);
+const lPts=noRay(new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0xff3030,size:.02})));lPts.frustumCulled=false;const lLn=noRay(new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xff5050,transparent:true,opacity:.35})));lLn.frustumCulled=false;S.add(lPts,lLn);
+const OBS={active:false,mesh:null,spd:.45,goalz:.42,top:.32};
+function mkTrolley(k){const w=k=='B'?.9:.2,d=.3,top=k=='B'?.85:.32,g=new THREE.Group(),m=(a,b,c,mt,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(a,b,c),mt);o.position.set(x,y,z);o.castShadow=true;g.add(o)};
+m(w,.03,d,dg,0,.09,0);m(w,top-.18,d,hzM([2,2]),0,.105+(top-.18)/2,0);m(w-.02,.06,d-.02,cardM,0,top-.03,0);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(c=>cyl(.04,.04,.03,dg,c[0]*(w/2-.02),.04,c[1]*(d/2-.04),g,1));
+const bc=new THREE.Mesh(new THREE.SphereGeometry(.02,10,10),new THREE.MeshBasicMaterial({color:0xff8c00}));bc.position.set(0,top+.03,0);g.add(bc);return g}
+const linkPts=(k,p)=>{const sx=Math.sin(k[0]),sz=Math.cos(k[0]),r1=LA*Math.sin(k[1]),y1=SH+LA*Math.cos(k[1]),r2=r1+LB*Math.sin(k[1]+k[2]);return [V(BX,SH,BZ),V(BX+sx*r1,y1,BZ+sz*r1),V(BX+sx*r2,y1+LB*Math.cos(k[1]+k[2]),BZ+sz*r2),p]};
+const pathHit=(pts,box,from)=>{for(let s=0;s<pts.length-1;s++)for(let i=(s?0:from);i<=12;i++){const c=pts[s].clone().lerp(pts[s+1],i/12),k=IK(c);if(!k)return 'IK';const l=linkPts(k,c);for(let j=0;j<3;j++)for(let u=0;u<=4;u++)if(box.containsPoint(l[j].clone().lerp(l[j+1],u/4)))return 'HIT'}return null};
+const SM={NORMAL:['OBSTACLE_DETECTED','EMERGENCY_STOP_LATCHED'],OBSTACLE_DETECTED:['PROTECTIVE_STOP','EMERGENCY_STOP_LATCHED'],PROTECTIVE_STOP:['ENVIRONMENT_RESCAN','EMERGENCY_STOP_LATCHED'],ENVIRONMENT_RESCAN:['REPLANNING','EMERGENCY_STOP_LATCHED'],REPLANNING:['SAFETY_VALIDATION','EMERGENCY_STOP_LATCHED'],SAFETY_VALIDATION:['RESUME_APPROVED','REPLANNING','EMERGENCY_STOP_LATCHED'],RESUME_APPROVED:['TASK_RESUMED','EMERGENCY_STOP_LATCHED'],TASK_RESUMED:['NORMAL','OBSTACLE_DETECTED','EMERGENCY_STOP_LATCHED'],EMERGENCY_STOP_LATCHED:['OPERATOR_NOTIFICATION'],OPERATOR_NOTIFICATION:['WAITING_FOR_OPERATOR_RESET'],WAITING_FOR_OPERATOR_RESET:['NORMAL','TASK_ABORTED'],TASK_ABORTED:['NORMAL']};
+const beep=()=>{if($('#mut').checked)return;try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.05;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.4)}catch(e){}};
+const SAFE={state:'NORMAL',hold:false,latched:false,ack:false,plan:null,att:0,t:0,scanT:0,age:0,est:null,evt:null,wi:0,wp:null,recovered:0,cand:null,snap:null,msg:'',hc:null,
+go(n){if(!SM[this.state].includes(n)){L('<b>SAFETY</b> invalid transition '+this.state+' → '+n+' refused');return false}L('<b style="color:#e8a317">SAFETY</b> '+this.state+' → '+n);this.state=n;this.t=0;this.paint();renderAl();ui();return true},
+paint(){const s=this.state,m=(l,st)=>l.forEach(n=>AG[n]&&AG[n].st!='idle'&&(AG[n].st=st));
+if(s=='OBSTACLE_DETECTED'||s=='PROTECTIVE_STOP')m([1,11,12,13],'ps');else if(s=='ENVIRONMENT_RESCAN')m([3,6],'running');else if(s=='REPLANNING'||s=='SAFETY_VALIDATION')m([9,12],'running');else if(s=='RESUME_APPROVED'||s=='TASK_RESUMED')m([1,11,12,13],'running');
+else if(this.latched){[1,6,7,8,9,10,11,12,13].forEach(n=>AG[n]&&AG[n].st!='idle'&&(AG[n].st='es'));if(AG[16])AG[16].st='running'}
+beac.material.color.set(this.latched?0xff2020:this.state=='NORMAL'?0x3fb950:0xe8a317);bl.intensity=this.latched?1:0},
+begin(s){this.wp=s.wp;for(const w of s.wp)if(!IK(w[1]))throw Error('SAFETY_REJECT: waypoint outside joint/workspace limits');L('<b>SAFETY GATE</b> plan approved: '+s.wp.length+' waypoints, joint limits OK, speed <= 0.5 m/s')},
+launch(){if(OBS.active)return;const k=$('#ecs').value;if(OBS.mesh)S.remove(OBS.mesh);OBS.mesh=mkTrolley(k);OBS.top=k=='B'?.85:.32;OBS.mesh.position.set(.1,0,.92);S.add(OBS.mesh);OBS.active=true;this.est=null;this.hc=null;L('<b style="color:#f85149">EVENT</b> unexpected pallet trolley entering the robot cell (test '+k+')')},
+scan(dt){if(!OBS.active||!OBS.mesh.visible){this.est=null;lPts.geometry.setFromPoints([]);lLn.geometry.setFromPoints([]);this.age=0;return}if($('#ldo').checked)return;OBS.mesh.updateMatrixWorld(true);const hits=[],seg=[],a0=Math.atan2(-.5,1.1);
+for(let a=-.9;a<=.9;a+=.015){const d=V(Math.cos(a0+a),0,Math.sin(a0+a));rc2.set(LS,d);rc2.far=3;const h=rc2.intersectObject(OBS.mesh,true)[0];if(h){hits.push(h.point.clone());seg.push(LS,h.point)}}
+lPts.geometry.setFromPoints(hits);lLn.geometry.setFromPoints(seg);this.age=0;if(!hits.length){this.est=null;return}
+const c=hits.reduce((p,h)=>p.add(h),V(0,0,0)).divideScalar(hits.length),v=this.hc?c.clone().sub(this.hc).divideScalar(dt):V(0,0,0);this.hc=c;const pv=this.est?this.est.v:V(0,0,0);
+this.est={c,v:pv.clone().multiplyScalar(.5).add(v.multiplyScalar(.5)),box:new THREE.Box3().setFromObject(OBS.mesh),n:hits.length,dist:Math.min(...hits.map(h=>Math.hypot(h.x-BX,h.z-BZ)))}},
+threat(){const e=this.est,b=e.box.clone().translate(V(e.v.x*.6,0,e.v.z*.6)).union(e.box).expandByScalar(.08);if(!ZONE.intersectsBox(b))return false;return pathHit([tipPos(),...(this.wp||[]).slice(this.wi).map(w=>w[1])],b,0)=='HIT'},
+detectEv(){const e=this.est,t=tipPos();M.ps++;this.att=0;this.snap=AG.map(a=>a&&a.st);this.old=[t,...(this.wp||[]).slice(this.wi).map(w=>w[1])];this.evt={obs:`pos (${e.c.x.toFixed(2)}, ${e.c.z.toFixed(2)}) dist ${e.dist.toFixed(2)} m`};
+this.go('OBSTACLE_DETECTED');this.hold=true;L(`<b>LIDAR+DEPTH</b> trolley: centre (${e.c.x.toFixed(2)}, ${e.c.z.toFixed(2)}) size ${(e.box.max.x-e.box.min.x).toFixed(2)}x${(e.box.max.z-e.box.min.z).toFixed(2)}x${e.box.max.y.toFixed(2)} m, velocity (${e.v.x.toFixed(2)}, ${e.v.z.toFixed(2)}) m/s, ${e.dist.toFixed(2)} m from robot, intersects trajectory: YES, inside protected zone: YES`);
+rLine.geometry.setFromPoints(this.old);this.go('PROTECTIVE_STOP');beep()},
+tick(dt){const o=OBS;if(o.active&&o.mesh.visible&&o.mesh.position.z>o.goalz)o.mesh.position.z=Math.max(o.goalz,o.mesh.position.z-o.spd*dt);
+this.scanT+=dt;this.t+=dt;this.age+=dt;if(this.scanT>=.1){const d=this.scanT;this.scanT=0;this.scan(d)}
+const live=this.state=='NORMAL'||this.state=='TASK_RESUMED';
+if(live&&busy&&o.active&&o.mesh.visible){if($('#ldo').checked&&this.age>.5)return this.eStop('LiDAR data stale - cannot establish that movement is safe');if(this.est&&this.threat())this.detectEv()}
+const s=this.state,t=this.t;
+if(s=='PROTECTIVE_STOP'&&t>.6){this.go('ENVIRONMENT_RESCAN');DET=detect();OB.copy(this.est.box);AG[3].log('rescan: '+DET.filter(d=>d.vis).length+' parcels + 1 dynamic obstacle');AG[6].log('obstacle map updated')}
+else if(s=='ENVIRONMENT_RESCAN'&&t>1){AG[9].log('received updated obstacle box, replanning from stopped pose');this.go('REPLANNING')}
+else if(s=='REPLANNING'&&t>.8)this.replan();else if(s=='SAFETY_VALIDATION'&&t>.6)this.approve();else if(s=='RESUME_APPROVED'&&t>.4)this.resume();
+else if(s=='TASK_RESUMED'&&t>1.5){this.recovered=1;AG.forEach((a,i)=>a&&this.snap&&this.snap[i]&&(a.st=this.snap[i]));this.go('NORMAL')}
+else if(s=='EMERGENCY_STOP_LATCHED'&&t>.5){this.go('OPERATOR_NOTIFICATION');beep();L('<b style="color:#f85149">OPERATOR NOTIFIED</b> '+this.evt.reason)}else if(s=='OPERATOR_NOTIFICATION'&&t>.3)this.go('WAITING_FOR_OPERATOR_RESET')},
+replan(){this.att++;M.replans++;const H=this.att==1?.45:.55,p=CUR,t=tipPos(),route=[['detour-up',V(t.x,H,t.z)],['detour-over',V(p.x,H,p.z)]],r=pathHit([t,...route.map(w=>w[1]),p],this.est.box.clone().expandByScalar(.05),1);
+AG[9].log('attempt '+this.att+': carry height '+H+' m');
+if(!r){this.cand=route;M.avoid++;trajLine.material.color.set(0xff8c00);setTraj([t,...route.map(w=>w[1]),p]);AG[12].log('MoveIt (sim): alternative route found');this.go('SAFETY_VALIDATION')}
+else{L('<b>REPLAN</b> attempt '+this.att+' rejected ('+r+')');if(this.att>=2)this.eStop('No collision-free route after '+this.att+' replanning attempts (obstacle height 0.85 m exceeds reachable carry height)');else this.t=0}},
+approve(){const t=tipPos(),pts=[t,...this.cand.map(w=>w[1]),CUR],r=pathHit(pts,this.est.box.clone().expandByScalar(.07),1);if(!r){L('<b>SAFETY GATE</b> alternative route validated (links + end effector swept, margin 0.07 m, speed 0.5 m/s)');this.go('RESUME_APPROVED')}else{L('<b>SAFETY GATE</b> route REJECTED ('+r+')');this.go('REPLANNING')}},
+resume(){this.plan=this.cand;trajLine.material.color.set(0x2f6fed);this.hold=false;this.go('TASK_RESUMED');if(tw){const t=tw;tw=null;t.rej(Error('REPLAN'))}},
+eStop(reason){if(this.latched)return;const t=tipPos(),e=this.est;this.latched=true;this.ack=false;this.hold=true;estop=true;convOn=false;M.es++;this.msg='';
+this.evt={reason,obs:e?`(${e.c.x.toFixed(2)}, ${e.c.z.toFixed(2)}) dist ${e.dist.toFixed(2)} m`:'none / unknown',tip:`(${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)})`,grip:held?'closed, holding '+held.id:'open / empty'};
+L('<b style="color:#f85149">EMERGENCY STOP LATCHED</b> '+reason);this.go('EMERGENCY_STOP_LATCHED');if(AG[16])AG[16].log('latched: all motion blocked until operator reset')},
+op(a){if(!this.latched)return;if(a=='clear'){OBS.active=false;if(OBS.mesh)OBS.mesh.visible=false;this.est=null;pillar.visible?OB.setFromObject(pillar):OB.makeEmpty();L('operator cleared the obstruction')}
+else if(a=='ack'){this.ack=true;L('operator acknowledged the emergency')}
+else if(a=='reset'){this.msg='';if(this.state!='WAITING_FOR_OPERATOR_RESET')this.msg='Reset refused: notification still in progress';else if(!this.ack)this.msg='Reset refused: acknowledge first';else if(OBS.active)this.msg='Reset refused: obstruction still inside the safety zone';
+else{DET=detect();if(this.go('NORMAL')){this.latched=false;this.hold=false;estop=false;this.recovered=0;AG.forEach(x=>x&&(x.st='idle'));L('<b style="color:#3fb950">OPERATOR RESET</b> workspace rescanned and clear - a new motion plan is required (run a new command)')}}if(this.msg)L(this.msg)}
+this.paint();renderAl();ui()},
+hardReset(){OBS.active=false;if(OBS.mesh)OBS.mesh.visible=false;this.est=null;this.state='NORMAL';this.latched=false;this.hold=false;this.ack=false;this.plan=null;this.recovered=0;this.msg='';lPts.geometry.setFromPoints([]);lLn.geometry.setFromPoints([]);this.paint();renderAl()}};
+function renderAl(){const s=SAFE.state,e=SAFE.evt||{};let h='';
+if(SAFE.latched)h=`<div class=alb style="border-color:#f85149"><b style="color:#f85149">EMERGENCY STOP ACTIVE – OPERATOR INTERVENTION REQUIRED</b><br>Unsafe object detected inside the robot operating zone. Robot execution has been stopped. Clear the obstruction and perform operator reset.<br>Reason: ${e.reason}<br>Obstacle: ${e.obs} · Robot tip: ${e.tip} · Gripper: ${e.grip} · Conveyor: STOPPED<br>Operator action required: clear hazard, acknowledge, reset.<br><button onclick="SAFE.op('clear')">1 Clear obstruction</button><button onclick="SAFE.op('ack')">2 Acknowledge</button><button onclick="SAFE.op('reset')">3 Operator reset</button> <span class=note>${s}${SAFE.ack?' · ACKNOWLEDGED':''}</span><div style="color:#f85149">${SAFE.msg}</div></div>`;
+else if(['OBSTACLE_DETECTED','PROTECTIVE_STOP','ENVIRONMENT_RESCAN','REPLANNING','SAFETY_VALIDATION','RESUME_APPROVED'].includes(s))h=`<div class=alb style="border-color:#e8a317"><b style="color:#e8a317">PROTECTIVE STOP – OBSTACLE DETECTED – REPLANNING</b><br>${s} · trolley ${e.obs}</div>`;
+else if(SAFE.recovered)h=`<div class=alb style="border-color:#3fb950"><b style="color:#3fb950">RECOVERED – alternative route approved by the safety supervisor</b> <button onclick="SAFE.recovered=0;renderAl()">Dismiss</button></div>`;
+$('#al').innerHTML=h}
+function renderSf(){const e=SAFE.est;$('#sf').innerHTML=`State <b style="color:${SAFE.latched?'#f85149':SAFE.state=='NORMAL'?'#3fb950':'#e8a317'}">${SAFE.state}</b><br>Obstacle ${e?`(${e.c.x.toFixed(2)}, ${e.c.z.toFixed(2)}) v(${e.v.x.toFixed(2)}, ${e.v.z.toFixed(2)})<br>distance ${e.dist.toFixed(2)} m`:'none detected'}<br>Replan attempts ${SAFE.att} · avoidance ${M.avoid} · hold ${SAFE.hold?'YES':'no'}`}
+// UI
+const btn=(p,t,f)=>{const b=document.createElement('button');b.textContent=t;b.onclick=f;p.append(b);return b},idle=f=>()=>busy||SAFE.latched?L('Blocked (busy or E-stop latched)'):f();
+const tb=$('#tb');
+[['Home',idle(()=>moveQ(HOME,1.2))],['Open',idle(()=>grip(.09))],['Close',idle(()=>closeG())],['Spawn parcel',()=>spawn()],['Conveyor',()=>{convOn=!convOn;L('Conveyor '+(convOn?'started':'stopped'))}],['Obstacle',()=>obst(!pillar.visible)],['Avoid ON/OFF',()=>{avoidOn=!avoidOn;L('Obstacle avoidance '+(avoidOn?'ENABLED':'DISABLED'))}],['Zones',()=>zone.visible=!zone.visible],['Remove obj',()=>{const o=OBJS.find(z=>!z.held&&z===OBJS[OBJS.length-1]);if(o){S.remove(o.mesh);OBJS.splice(OBJS.indexOf(o),1);L('Removed '+o.id)}}],['Reset env',()=>{if(!busy)resetEnv()}],
+['Trajectory',()=>{trajLine.visible=rLine.visible=!trajLine.visible}],['Camera view',()=>showCam=!showCam],['Boxes',()=>boxes=!boxes],['Coords',()=>coords=!coords],['Depth',()=>depth=!depth],
+].forEach(a=>btn(tb,...a));
+tb.insertAdjacentHTML('beforeend','<label class=pill>Conv speed <input type=range id=cvs min=0 max=15 value=6 style="width:70px"></label>');$('#cvs').oninput=e=>{cSpeed=e.target.value/100};VW.forEach(v=>btn(tb,v[0],()=>{goal=[V(...v[1]),V(...v[2])]}));
+$('#bS').onclick=()=>runCommand($('#cmd').value);$('#bP').onclick=()=>{paused=true};$('#bR').onclick=()=>{paused=false};
+$('#bE').onclick=()=>{paused=false;SAFE.eStop('operator pressed EMERGENCY STOP')};
+$('#bRs').onclick=()=>{if(SAFE.latched){SAFE.op('reset');if(SAFE.latched)return}estop=true;setTimeout(()=>{estop=false;paused=false;busy=false;tw=null;if(held){S.attach(held.mesh);held.mesh.position.y=held.h/2;held.held=0;held=null}q=[...HOME];applyQ(q);setGap(.09);setTraj([]);resetEnv();obst(false);SAFE.hardReset();convOn=true;lastSpawn=0;AG.forEach(a=>a&&(a.st='idle'));prog=0;L('Reset: robot homed, agents cleared');ui()},200)};
+[['Scenario 1 – Normal Pick and Place','Pick up the red parcel and place it in sorting bin A',1],['Scenario 2 – Dynamic Emergency Intrusion','Pick up the priority parcel and place it in sorting bin A',2]].forEach(x=>btn($('#sc'),x[0],()=>{if(busy||SAFE.latched)return L('Blocked: busy or E-stop latched');scn=x[2];$('#cmd').value=x[1];resetEnv();obst(false);SAFE.hardReset();L('Selected '+x[0]+' - press Start')}));
+$('#sc').insertAdjacentHTML('beforeend','<div class=note>Emergency condition (Scenario 2):</div><select id=ecs style="width:100%"><option value=A>Test A - alternative route available</option><option value=B>Test B - no safe route (latched E-stop)</option></select><label class=note><input type=checkbox id=ldo> simulate LiDAR dropout (fail-safe)</label> <label class=note><input type=checkbox id=mut checked> mute alarm</label>');
+$('#jn').innerHTML=[0,1,2,3,4,5].map(i=>`<div>J${i+1} <span id=jv${i}></span><input type=range id=js${i} min=${Math.ceil(LIM[i][0]*57.3)} max=${Math.floor(LIM[i][1]*57.3)} step=1></div>`).join('');
+[0,1,2,3,4,5].forEach(i=>$('#js'+i).oninput=e=>{if(!busy&&!SAFE.latched){q[i]=Math.min(LIM[i][1],Math.max(LIM[i][0],e.target.value/57.3));applyQ(q)}});
+function ui(){$('#ag').innerHTML=AG.slice(1).map(a=>`<div class="ag ${a.st}" title="${a.role} | in: ${a.i} | out: ${a.o}"><span class=dot></span>A${a.n} ${a.name} <span class=note>${{ps:'protective stop',es:'EMERGENCY STOP',running:'processing',done:'completed',error:'failed'}[a.st]||a.st}</span></div>`).join('')}
+function panels(){const tp=tipPos();$('#s1').textContent='SIM '+(estop?'E-STOP':paused?'PAUSED':busy?'RUNNING':'IDLE');$('#s2').textContent='ROBOT '+(held?'HOLDING':busy?'ACTIVE':'IDLE');$('#s3').textContent='CAM '+(showCam?'ON':'OFF');$('#s4').textContent='CONVEYOR '+(convOn&&!busy&&!estop&&!paused?'RUNNING':'STOPPED');led.material.color.set(estop?0xf85149:busy?0xf5a623:0x3fb950);
+q.forEach((v,i)=>{$('#jv'+i).textContent=(v*57.3).toFixed(0)+'°';if(document.activeElement!=$('#js'+i))$('#js'+i).value=v*57.3});
+$('#ee').innerHTML=`<b>EE</b> X ${tp.x.toFixed(2)} Y ${tp.y.toFixed(2)} Z ${tp.z.toFixed(2)}`;$('#gs').innerHTML=`<b>Gripper</b> gap ${(gap*100).toFixed(1)} cm · ${held?'holding '+held.id:'empty'}`;$('#tk').textContent=curTask;renderSf();$('#s5').textContent='LIDAR '+(OBS.active?(SAFE.est?'OBSTACLE':'SCANNING'):'CLEAR')+' · SAFETY '+SAFE.state;$('#s5').style.color=SAFE.latched?'#f85149':SAFE.state=='NORMAL'?'':'#e8a317';
+$('#dt').innerHTML=DET.map(d=>`<div style="border-bottom:1px solid #202833"><span style="color:${HX(d.color)}">■</span> ${d.id} ${d.name}<br>(${d.x.toFixed(2)}, ${d.y.toFixed(2)}, ${d.z.toFixed(2)}) d=${d.dist.toFixed(2)} · ${d.vis?(d.held?'HELD':'DETECTED'):'NOT VISIBLE'}</div>`).join('');
+const n=M.done+M.failed,avg=M.times.length?M.times.reduce((a,b)=>a+b)/M.times.length:0;
+$('#an').innerHTML=`Commands ${M.cmds} · Done ${M.done} · Failed ${M.failed}<br>Success rate ${n?(100*M.done/n).toFixed(0):0}% · Avg time ${avg.toFixed(1)} s<br>Objects detected ${M.det} · Grasps ${M.grasps} ok / ${M.gfail} failed<br>Protective stops ${M.ps} · E-stops ${M.es} · Replans ${M.replans} · Avoidance events ${M.avoid}<br>In bins ${OBJS.filter(inBin).length} · Pending ${OBJS.filter(o=>!inBin(o)&&!o.held).length} · Tasks/min ${(M.done/((performance.now()-T0)/60000)).toFixed(1)}<div class=bar><i style="width:${prog*100}%"></i></div>Progress ${(prog*100).toFixed(0)}%`}
+function drawOv(W,H){ov.width=W;ov.height=H;const x=ov.getContext('2d');if(!showCam)return;const iw=Math.min(240,W*.45),ih=iw*.75,ix=W-iw-8,iy=H-ih-8;x.strokeStyle='#f5a623';x.strokeRect(ix,iy,iw,ih);x.fillStyle='#f5a623';x.font='10px monospace';x.fillText(depth?'DEPTH CAM (sim)':'RGB-D CAM (sim) YOLOv8-style',ix+4,iy+11);
+if(boxes)for(const d of DET){if(!d.vis)continue;const bx=ix+(d.box[0]*.5+.5)*iw,by=iy+(1-(d.box[3]*.5+.5))*ih;x.strokeStyle=x.fillStyle=HX(d.color);x.strokeRect(bx,by,(d.box[2]-d.box[0])*.5*iw,(d.box[3]-d.box[1])*.5*ih);x.fillText(d.id.slice(1)+' '+d.name+(coords?` ${d.x.toFixed(2)},${d.z.toFixed(2)}`:''),bx,by-2)}}
+const dm=new THREE.MeshDepthMaterial();
+function render(){const W=cv.clientWidth,H=cv.clientHeight;R.setScissorTest(false);R.setViewport(0,0,W,H);R.render(S,cam);
+if(showCam){const iw=Math.min(240,W*.45),ih=iw*.75;R.setScissorTest(true);R.setViewport(W-iw-8,8,iw,ih);R.setScissor(W-iw-8,8,iw,ih);helper.visible=false;if(depth)S.overrideMaterial=dm;R.render(S,vcam);S.overrideMaterial=null;helper.visible=showCam;R.setScissorTest(false)}else helper.visible=false;drawOv(W,H)}
+function rs(){const W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;R.setSize(W,H);cam.aspect=W/H;cam.updateProjectionMatrix()}new ResizeObserver(rs).observe(cv);rs();
+let last=performance.now(),acc=0;
+(function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;
+SAFE.tick(dt);if(tw){const t=tw;if(estop){tw=null;t.rej(Error('E-STOP'))}else if(!paused&&!SAFE.hold){t.t+=dt;const k=Math.min(1,t.t/t.dur);try{t.f(k*k*(3-2*k));if(k>=1){tw=null;t.res()}}catch(e){tw=null;t.rej(e)}}}
+stepCam();conv(dt);render();acc+=dt;if(acc>.3){acc=0;DET=detect();panels()}})(last);
+window.onerror=m=>L('JS error: '+m);ui();obst(false);L('Simulation ready. Scenario 1 (normal pick and place) starts automatically.');setTimeout(()=>{if(!busy)runCommand($('#cmd').value)},3500);
+</script></body></html>

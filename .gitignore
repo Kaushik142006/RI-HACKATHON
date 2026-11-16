@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & Environment
+.env
+*.pem
+*.key
+
+# Machine Learning & Large Weights
+*.pt
+*.pth
+*.onnx
+*.engine
+data/model_artifacts/*.joblib
+data/model_artifacts/*.pkl
+
+# Logs and Run Artifacts
+*.log
+logs/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ROS 2 & Gazebo artifacts
+log/
+install/
+build/

@@ -1,0 +1,38 @@
+vision:
+  yolo:
+    detector_weights: "yolov8n.pt"
+    segmentation_weights: "yolov8n-seg.pt"
+    conf_threshold: 0.50
+    iou_threshold: 0.45
+    target_classes:
+      - bottle
+      - cup
+      - bowl
+      - box
+      - apple
+      - book
+      - scissors
+      - can
+  tracker:
+    algorithm: "bytetrack"
+    track_thresh: 0.5
+    track_buffer: 30
+    match_thresh: 0.8
+  color_ranges_hsv:
+    red:
+      - lower: [0, 100, 100]
+        upper: [10, 255, 255]
+      - lower: [170, 100, 100]
+        upper: [180, 255, 255]
+    green:
+      - lower: [35, 80, 80]
+        upper: [85, 255, 255]
+    blue:
+      - lower: [95, 100, 100]
+        upper: [130, 255, 255]
+    yellow:
+      - lower: [20, 100, 100]
+        upper: [35, 255, 255]
+  spatial:
+    table_height_z_m: 0.0
+    workspace_safety_margin_m: 0.05

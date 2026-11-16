@@ -1,0 +1,4 @@
+command,intent,action,target_object,target_color,destination,spatial_preposition
+"Pick up the red bottle and place it inside the storage box.",pick_and_place,pick_and_place,bottle,red,storage box,inside
+"Grab the blue cup and put it on the tray.",pick_and_place,pick_and_place,cup,blue,tray,on
+"Take the green apple and place it inside the basket.",pick_and_place,pick_and_place,apple,green,basket,inside

@@ -1,0 +1,22 @@
+camera:
+  type: realsense_d435i
+  resolution:
+    width: 1280
+    height: 720
+  fps: 30
+  streams:
+    color: true
+    depth: true
+    infrared: false
+  intrinsics:
+    fx: 615.0
+    fy: 615.0
+    cx: 640.0
+    cy: 360.0
+  depth_scale: 0.001
+  clipping_distance:
+    min_m: 0.15
+    max_m: 3.0
+  extrinsics_to_base:
+    translation: [0.0, 0.5, 1.1]
+    rotation_euler_deg: [0.0, 45.0, -90.0]
