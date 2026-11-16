@@ -4,11 +4,12 @@ Provides interactive human-robot interface supporting voice/text commands,
 live pipeline visualization, safety gate status, notifications, and history.
 """
 
+from pathlib import Path
 from typing import Dict, Any, Optional
 import time
 import logging
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from orchestration.graph import VLAMultiAgentGraph
 from orchestration.state import AgentState
@@ -213,10 +214,15 @@ HTML_TEMPLATE = """
 """
 
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_dashboard(request: Request):
-    """Serve single-page web dashboard."""
-    return HTMLResponse(content=HTML_TEMPLATE)
+@app.get("/")
+async def serve_dashboard():
+    frontend_path = (
+        Path(__file__).resolve().parent.parent / "frontend.html"
+    )
+    return FileResponse(
+        frontend_path,
+        media_type="text/html"
+    )
 
 
 @app.post("/api/command")
